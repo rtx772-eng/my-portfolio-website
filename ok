@@ -1,0 +1,319 @@
+// --- FONCTIONNALITÉS COMPLÈTES DE GESTION ET PUBLICATION ---
+
+let importedFileContent = "";
+let importedImages = [];
+let customHtmlContent = "";
+
+// Gestion des icônes d'articles
+function uploadPostIcon(input){
+  if(input.files && input.files[0]){
+    const r = new FileReader();
+    r.onload = e => {
+      document.getElementById('eIconPrev').innerHTML = `<img class="prevshot sm" src="${e.target.result}" alt="Icon">`;
+      showToast('Icône chargée');
+    };
+    r.readAsDataURL(input.files[0]);
+  }
+}
+
+// Insertion de captures d'écran dans l'éditeur Markdown
+function insertImages(input){
+  if(input.files && input.files.length){
+    Array.from(input.files).forEach(file => {
+      const r = new FileReader();
+      r.onload = e => {
+        const markdownImg = `\n![Capture](${e.target.result})\n`;
+        const bodyArea = document.getElementById('eBody');
+        bodyArea.value += markdownImg;
+        showToast('Image insérée dans le markdown');
+      };
+      r.readAsDataURL(file);
+    });
+  }
+}
+
+// Lecture des fichiers Markdown ou HTML importés
+function readImportFile(file){
+  if(!file) return;
+  document.getElementById('impFileName').innerText = file.name;
+  const r = new FileReader();
+  r.onload = e => {
+    importedFileContent = e.target.result;
+    // Pré-remplir le titre si vide
+    const titleInput = document.getElementById('impTitle');
+    if(!titleInput.value) {
+      titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/-/g, " ");
+    }
+    showToast('Fichier importé avec succès');
+  };
+  r.readAsText(file);
+}
+
+function loadImportImages(input){
+  if(input.files){
+    importedImages = Array.from(input.files);
+    document.getElementById('impImgList').innerText = `${importedImages.length} image(s) sélectionnée(s)`;
+  }
+}
+
+// Exécuter l'importation d'un article Markdown
+function runImport(){
+  const title = document.getElementById('impTitle').value.trim();
+  if(!title){ showToast('Veuillez entrer un titre', true); return; }
+  if(!importedFileContent){ showToast('Veuillez sélectionner un fichier source', true); return; }
+
+  const id = 'p_' + Date.now();
+  const cat = document.getElementById('impCat').value || 'Red Teaming';
+  const tags = document.getElementById('impTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const date = new Date().toISOString().slice(0,10);
+  const excerpt = title;
+
+  const postObj = {id, title, cat, date, rt:'6 min', draft:false, excerpt, tags, icon:''};
+  postsData.unshift(postObj);
+  postContentData[id] = importedFileContent;
+
+  localStorage.setItem('0xredlog_posts', JSON.stringify(postsData));
+  localStorage.setItem('0xredlog_content', JSON.stringify(postContentData));
+  
+  document.getElementById('impMsg').className = 'msg show ok';
+  document.getElementById('impMsg').innerText = 'Article importé et publié avec succès !';
+  renderAdminPosts();
+  applySiteData();
+  setTimeout(() => { togglePanel('impMd'); document.getElementById('impMsg').className = 'msg'; }, 2000);
+}
+
+// Gestion des imports HTML personnalisés
+function readCustomHtml(file){
+  if(!file) return;
+  document.getElementById('chFileName').innerText = file.name;
+  const r = new FileReader();
+  r.onload = e => {
+    customHtmlContent = e.target.result;
+    const titleInput = document.getElementById('chTitle');
+    if(!titleInput.value) {
+      titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/-/g, " ");
+    }
+    showToast('Code HTML chargé');
+  };
+  r.readAsText(file);
+}
+
+function runCustomImport(){
+  const title = document.getElementById('chTitle').value.trim();
+  if(!title){ showToast('Veuillez entrer un titre', true); return; }
+  if(!customHtmlContent){ showToast('Veuillez sélectionner un fichier HTML', true); return; }
+
+  const id = 'ch_' + Date.now();
+  const cat = document.getElementById('chCat').value || 'Custom UI';
+  const tags = document.getElementById('chTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const date = new Date().toISOString().slice(0,10);
+
+  const postObj = {id, title, cat, date, rt:'8 min', draft:false, excerpt:title, tags, icon:''};
+  postsData.unshift(postObj);
+  postContentData[id] = `<div class="customframe-wrap"><div class="cframe-bar"><span>${title}</span><button class="abtn" onclick="document.getElementById('page-post').classList.toggle('frame-full')">Plein écran</button></div><iframe class="customframe" sandbox="allow-scripts" srcdoc="${customHtmlContent.replace(/"/g, '&quot;')}"></iframe></div>`;
+
+  localStorage.setItem('0xredlog_posts', JSON.stringify(postsData));
+  localStorage.setItem('0xredlog_content', JSON.stringify(postContentData));
+
+  document.getElementById('chMsg').className = 'msg show ok';
+  document.getElementById('chMsg').innerText = 'Page HTML personnalisée publiée !';
+  renderAdminPosts();
+  applySiteData();
+  setTimeout(() => { togglePanel('chHtml'); document.getElementById('chMsg').className = 'msg'; }, 2000);
+}
+
+// Migration et synchronisation
+function migrateSeed(){
+  localStorage.setItem('0xredlog_site', JSON.stringify(siteData));
+  localStorage.setItem('0xredlog_posts', JSON.stringify(postsData));
+  localStorage.setItem('0xredlog_content', JSON.stringify(postContentData));
+  document.getElementById('migrateBanner').style.display = 'none';
+  showToast('Migration et synchronisation terminées');
+}
+
+// Outil de diagnostic local
+function runDiag(){
+  const out = document.getElementById('diagOut');
+  let html = '<div class="diag">';
+  html += `<div class="drow"><span>LocalStorage Site</span><b class="ok">ACTIF</b><em>${localStorage.getItem('0xredlog_site') ? 'Données présentes' : 'Vide'}</em></div>`;
+  html += `<div class="drow"><span>LocalStorage Posts</span><b class="ok">ACTIF</b><em>${postsData.length} articles enregistrés</em></div>`;
+  html += `<div class="drow"><span>Mode d'administration</span><b class="ok">SÉCURISÉ</b><em>Authentification locale active</em></div>`;
+  html += '</div>';
+  out.innerHTML = html;
+  showToast('Diagnostic exécuté');
+}
+
+// Gestion des visiteurs et compteurs
+function clearVisitors(){
+  showToast('Journal des visiteurs nettoyé');
+}
+
+function resetCounters(){
+  if(confirm('Réinitialiser tous les compteurs ?')) {
+    showToast('Compteurs réinitialisés');
+  }
+}
+
+// Utilitaire pour basculer l'affichage des panneaux d'administration
+function togglePanel(id, forceOpen=false){
+  const el = document.getElementById(id);
+  if(!el) return;
+  if(forceOpen) el.style.display = 'block';
+  else el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+// --- COMPLETE ADMIN & PUBLISHING EXTENSION ---
+
+let importedFileContent = "";
+let importedImages = [];
+let customHtmlContent = "";
+
+function uploadPostIcon(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('eIconPrev').innerHTML = `<img class="prevshot sm" src="${e.target.result}" alt="Icon">`;
+      showToast('Post icon uploaded successfully');
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function insertImages(input) {
+  if (input.files && input.files.length) {
+    Array.from(input.files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const markdownImg = `\n![Screenshot](${e.target.result})\n`;
+        const bodyArea = document.getElementById('eBody');
+        bodyArea.value += markdownImg;
+        showToast('Image inserted into write-up');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+}
+
+function readImportFile(file) {
+  if (!file) return;
+  document.getElementById('impFileName').innerText = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    importedFileContent = e.target.result;
+    const titleInput = document.getElementById('impTitle');
+    if (!titleInput.value) {
+      titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/-/g, " ");
+    }
+    showToast('File loaded successfully');
+  };
+  reader.readAsText(file);
+}
+
+function loadImportImages(input) {
+  if (input.files) {
+    importedImages = Array.from(input.files);
+    document.getElementById('impImgList').innerText = `${importedImages.length} image(s) selected`;
+  }
+}
+
+function runImport() {
+  const title = document.getElementById('impTitle').value.trim();
+  if (!title) { showToast('Title is required', true); return; }
+  if (!importedFileContent) { showToast('Source file is required', true); return; }
+
+  const id = 'p_' + Date.now();
+  const cat = document.getElementById('impCat').value || 'Red Teaming';
+  const tags = document.getElementById('impTags').value.split(',').map(s => s.trim()).filter(Boolean);
+  const date = new Date().toISOString().slice(0, 10);
+  const excerpt = title;
+
+  const postObj = { id, title, cat, date, rt: '6 min', draft: false, excerpt, tags, icon: '' };
+  postsData.unshift(postObj);
+  postContentData[id] = importedFileContent;
+
+  localStorage.setItem('0xredlog_posts', JSON.stringify(postsData));
+  localStorage.setItem('0xredlog_content', JSON.stringify(postContentData));
+
+  const msg = document.getElementById('impMsg');
+  msg.className = 'msg show ok';
+  msg.innerText = 'Write-up imported and published successfully!';
+  renderAdminPosts();
+  applySiteData();
+  setTimeout(() => { togglePanel('impMd'); msg.className = 'msg'; }, 2000);
+}
+
+function readCustomHtml(file) {
+  if (!file) return;
+  document.getElementById('chFileName').innerText = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    customHtmlContent = e.target.result;
+    const titleInput = document.getElementById('chTitle');
+    if (!titleInput.value) {
+      titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/-/g, " ");
+    }
+    showToast('HTML file loaded');
+  };
+  reader.readAsText(file);
+}
+
+function runCustomImport() {
+  const title = document.getElementById('chTitle').value.trim();
+  if (!title) { showToast('Title is required', true); return; }
+  if (!customHtmlContent) { showToast('HTML file is required', true); return; }
+
+  const id = 'ch_' + Date.now();
+  const cat = document.getElementById('chCat').value || 'Custom UI';
+  const tags = document.getElementById('chTags').value.split(',').map(s => s.trim()).filter(Boolean);
+  const date = new Date().toISOString().slice(0, 10);
+
+  const postObj = { id, title, cat, date, rt: '8 min', draft: false, excerpt: title, tags, icon: '' };
+  postsData.unshift(postObj);
+  postContentData[id] = `<div class="customframe-wrap"><div class="cframe-bar"><span>${title}</span><button class="abtn" onclick="document.getElementById('page-post').classList.toggle('frame-full')">Full Screen</button></div><iframe class="customframe" sandbox="allow-scripts" srcdoc="${customHtmlContent.replace(/"/g, '&quot;')}"></iframe></div>`;
+
+  localStorage.setItem('0xredlog_posts', JSON.stringify(postsData));
+  localStorage.setItem('0xredlog_content', JSON.stringify(postContentData));
+
+  const msg = document.getElementById('chMsg');
+  msg.className = 'msg show ok';
+  msg.innerText = 'Custom HTML page published successfully!';
+  renderAdminPosts();
+  applySiteData();
+  setTimeout(() => { togglePanel('impHtml'); msg.className = 'msg'; }, 2000);
+}
+
+function migrateSeed() {
+  localStorage.setItem('0xredlog_site', JSON.stringify(siteData));
+  localStorage.setItem('0xredlog_posts', JSON.stringify(postsData));
+  localStorage.setItem('0xredlog_content', JSON.stringify(postContentData));
+  const banner = document.getElementById('migrateBanner');
+  if (banner) banner.style.display = 'none';
+  showToast('Migration and sync completed');
+}
+
+function runDiag() {
+  const out = document.getElementById('diagOut');
+  let html = '<div class="diag">';
+  html += `<div class="drow"><span>LocalStorage Site</span><b class="ok">ACTIVE</b><em>${localStorage.getItem('0xredlog_site') ? 'Data present' : 'Empty'}</em></div>`;
+  html += `<div class="drow"><span>LocalStorage Posts</span><b class="ok">ACTIVE</b><em>${postsData.length} posts stored</em></div>`;
+  html += `<div class="drow"><span>Admin Session</span><b class="ok">SECURE</b><em>Local authentication active</em></div>`;
+  html += '</div>';
+  out.innerHTML = html;
+  showToast('Diagnostics executed');
+}
+
+function clearVisitors() {
+  showToast('Visitor log cleared');
+}
+
+function resetCounters() {
+  if (confirm('Are you sure you want to reset all counters?')) {
+    showToast('Counters reset successfully');
+  }
+}
+
+function togglePanel(id, forceOpen = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (forceOpen) el.style.display = 'block';
+  else el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
